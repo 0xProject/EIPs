@@ -117,6 +117,8 @@ struct Message {
 
 **Definition**: The *reference types* are arrays and structs. Arrays are either fixed size or dynamic and denoted by `Type[n]`  or `Type[]` respectively. Structs are references to other structs by their name. The standard supports recursive struct types.
 
+**Definition**: A *special member* is a member whose name starts with an underscore (`_`). Special members are reserved for future extensions of this standard. An implementation that does not support an extension for a special member must treat this member identically to normal members.
+
 **Definition**: The set of structured typed data `𝕊` contains all the instances of all the struct types.
 
 ### Definition of `hashStruct`
