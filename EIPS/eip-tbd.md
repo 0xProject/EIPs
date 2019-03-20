@@ -54,7 +54,7 @@ This approach is flexible enough to allow developers to efficiently watch any ar
 
 ### eth_getStateDiff
 
-Returns the state trie and storage trie diffs for the requested block.
+Returns the state trie and nested storage trie diffs for the requested block.
 
 ```
 {
@@ -78,16 +78,14 @@ Returns
 `Array` - An array of state diffs:
 
 - `address`: DATA|Array, 20 Bytes - Externally-owned or Contract address
-- `nonce`: Associated Nonce diff
-- `balance`: Associated Ether balance diff
-- `storageDiff`: Associated storage diff. An object where keys are the storage locations modified and the values contain the diff.
-- `code`: Associated code diff
+- `nonce`: Nonce diff
+- `balance`: Ether balance diff
+- `storageDiff`: Storage diff. An object where keys are the storage locations modified and the values contain the diff.
+- `code`: Code diff
 
 ```
 {
-  "id": 1,
-  "jsonrpc": "2.0",
-  "result": [
+    "result": [
     {
         "address": "0x5409ed021d9299bf6814279a6a1411a7e866a631",
         "nonce": {
@@ -110,7 +108,9 @@ Returns
         "code": "=",
     },
     { ... }
-  ]
+    ],
+    "id": 1,
+    "jsonrpc": "2.0"
 }
 ```
 
@@ -120,13 +120,13 @@ If the diff is empty, we simply output `=`. If the diff is non-empty, an object 
 
 <!--The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.-->
 
-The endpoints design attempts to remain as simple, and use-case agnostic as possible. It simply returns the state diff using the already defined [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) contents. Instead of simple a diff of the storage root, it goes one level deeper and also diffs the associate storage tries.
+The endpoints design attempts to remain as simple, and use-case agnostic as possible. It simply returns the state diff using the already defined [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) contents. Instead of returning the diff of the storage root, it goes one level deeper and also diffs the associate storage tries.
 
 ### Related work
 
 The Geth team has already implemented a custom [`debug_getModifiedAccountsByNumber`](https://github.com/ethereum/go-ethereum/blob/91eec1251c06727581063cd7e942ba913d806971/eth/api.go#L421) JSON-RPC method that returns the addresses with modified ETH balances for a given block. They have identified the need for a more efficient way of performing this task.
 
-The Parity team has implemented a custom [`trace_replayBlockTransactions`](https://wiki.parity.io/JSONRPC-trace-module#trace_replayblocktransactions) JSON-RPC method that returns the ETH balance diffs as well as storage trie diffs for all transactions within a block. They too have identified the need to expose functionality to their users.
+The Parity team has implemented a custom [`trace_replayBlockTransactions`](https://wiki.parity.io/JSONRPC-trace-module#trace_replayblocktransactions) JSON-RPC method that returns the ETH balance diffs as well as storage trie diffs for all transactions within a block. They too have identified the need to expose this functionality to their users.
 
 The EIP is largely an attempt to standardize these two approaches such that projects that wish to build solutions that aren't beholden to any single Ethereum client implementation may do so with confidence. Neither of the above methods are part of the standard and could be modified or removed easily.
 
