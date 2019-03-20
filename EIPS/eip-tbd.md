@@ -15,7 +15,7 @@ created: 2019-03-20
 
 <!--"If you can't explain it simply, you don't understand it well enough." Provide a simplified and layman-accessible explanation of the EIP.-->
 
-Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) differences introduced by executing the transactions within a specific block.
+Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) diffs introduced by executing the transactions within a block.
 
 ## Abstract
 
@@ -29,13 +29,13 @@ There is currently no way for developers to retrieve the state trie or storage t
 
 #### Ethereum balance watching
 
-One example use-case for requesting a state trie diff is efficiently tracking an arbitrarily large set of Ethereum balances. ETH transfers do not emit events and so there are currently only two ways to re-compute ETH balances when a new block is mined: re-fetch all ETH balances for all addresses of interest or request traces for every transaction within the block, find all calls to `Address(X).transfer`, see what address it was called with and re-fetch balances for that set of addresses. The former is simple but neither way is efficient.
+One example use-case for requesting a state trie diff is efficiently tracking an arbitrarily large set of Ethereum balances. ETH transfers do not emit events and so there are currently only two ways to re-compute ETH balances when a new block is mined: re-fetch all ETH balances for all addresses of interest or request traces for every transaction within the block, and re-fetch balances for all addresses involved. The former is simple but neither way is efficient.
 
-With `eth_getStateDiff`, a single JSON-RPC request will return all ETH balances modified by the block's transactions. Simple and efficient.
+With `eth_getStateDiff`, a single JSON-RPC request will return all ETH balances modified by all transactions within a single block. Simple and efficient.
 
 #### Arbitrary state watching
 
-The only available way to watch for contract state updates today is for a contract to emit an event whenever a piece of state is modified. Examples include the `Transfer` event in the ERC20 standard, which _SHOULD_ be triggered whenever a transfer is done. Conceivably one could parse the logs for all transactions in a block and know which user balances have changed. Unfortunately this is still not the case. Not all ERC20's implement the specification properly, and some omit the `Transfer` event. Even tokens that do follow the specification to the letter have no guidance on whether to fire `Transfer` events when minting or burning tokens. Rather then rely on an event, a proxy for the state change, `eth_getStateDiff` would allow anyone to watch the state itself.
+The only available way to watch for contract state updates today is for a contract to emit an event whenever a piece of state is modified. Examples include the `Transfer` event in the ERC20 standard, which _SHOULD_ be triggered whenever a transfer is done. Conceivably one could parse the logs for all transactions in a block and know which user balances have changed. Unfortunately this is still not the case. Not all ERC20's implement the specification properly, some omitting the `Transfer` event. Even tokens that do follow the specification to the letter have no guidance on whether to fire `Transfer` events when minting or burning tokens. Rather then rely on an event, a proxy for the state change, `eth_getStateDiff` would allow anyone to watch the state itself.
 
 As proposed by @recmo in [this RFC](https://github.com/ethereum/EIPs/issues/781), an alternative way of implementing state watching would be to:
 
@@ -44,7 +44,9 @@ As proposed by @recmo in [this RFC](https://github.com/ethereum/EIPs/issues/781)
 
 When a new block is mined, call `eth_getStateDiff` for the block and see if any of the storage locations of interest have been modified. If so, re-compute the balance for the associated user. All other user balances do not need to be re-computed.
 
-This approach does not rely on developers adhering to ERC standards and can be used to watch arbitrary state, whether or not the developer of a contract thought it important enough to emit an event for it.
+This approach is flexible enough to allow developers to efficiently watch any arbitrary contract state. It also allows developers to build applications that are more robust and cannot be easily tricked by incorrect or malicious implementations of contracts that omit events while modifying state. This is an especially important consideration for financial applications.
+
+**Limitations**: The semantics of the function call to monitor are similar to that of STATICCALL, with the additional restriction that non-deterministic opcodes (BLOCKHASH, COINBASE, …) should not be used (they could be used at the risk of false negatives).
 
 ## Specification
 
@@ -54,7 +56,7 @@ This approach does not rely on developers adhering to ERC standards and can be u
 
 Returns the state trie and storage trie diffs for the requested block.
 
-````
+```
 {
     "method": "eth_getStateDiff",
     "params": [
@@ -71,16 +73,15 @@ Parameters
 1. Block identifier (either a block hash or number)
 2. The block identifier type (either "hash" or "number")
 
-
 Returns
 
 `Array` - An array of state diffs:
 
--   `address`: DATA|Array, 20 Bytes - Externally-owned or Contract address
--   `nonce`: Associated Nonce diff
--   `balance`: Associated Ether balance diff
--   `storageDiff`: Associated storage diff. An object where keys are the storage locations modified and the values contain the diff.
--   `code`: Associated code diff
+- `address`: DATA|Array, 20 Bytes - Externally-owned or Contract address
+- `nonce`: Associated Nonce diff
+- `balance`: Associated Ether balance diff
+- `storageDiff`: Associated storage diff. An object where keys are the storage locations modified and the values contain the diff.
+- `code`: Associated code diff
 
 ```
 {
@@ -115,7 +116,6 @@ Returns
 
 If the diff is empty, we simply output `=`. If the diff is non-empty, an object is returned with two properties (`from` - the previous value, and `to` - the new value).
 
-
 ## Rationale
 
 <!--The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.-->
@@ -145,4 +145,7 @@ TODO
 ## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
-````
+
+```
+
+```
