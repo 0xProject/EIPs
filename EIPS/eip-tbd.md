@@ -15,13 +15,13 @@ created: 2019-03-20
 
 <!--"If you can't explain it simply, you don't understand it well enough." Provide a simplified and layman-accessible explanation of the EIP.-->
 
-Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) diffs introduced by specific a block.
+Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) diffs introduced between any two blocks.
 
 ## Abstract
 
 <!--A short (~200 word) description of the technical issue being addressed.-->
 
-There is currently no way for developers to retrieve the state trie or storage trie changes introduced by the transactions in a block. Trie diffs are a very efficient way to figure out what blockchain state has changed since the last block, _without_ re-executing and tracing every transactions within a block.
+There is currently no way for developers to retrieve the state trie or storage trie changes introduced between two blocks. Trie diffs are a very efficient way to figure out what blockchain state has changed between blocks, _without_ re-executing and tracing every transactions within the blocks.
 
 ## Motivation
 
@@ -31,7 +31,7 @@ There is currently no way for developers to retrieve the state trie or storage t
 
 One example use-case for requesting a state trie diff is efficiently tracking an arbitrarily large set of Ethereum balances. ETH transfers do not emit events and so there are currently only two ways to update ETH balances when a new block is mined: re-fetch all ETH balances for all addresses of interest or request traces for every transaction within the block, and re-fetch balances for all addresses involved. The former is simple but neither way is efficient.
 
-With `eth_getStateDiff`, a single JSON-RPC request will return all ETH balances modified by all transactions within a single block. Simple and efficient.
+With `eth_getStateDiff`, a single JSON-RPC request will return all ETH balances modified by all transactions within a block range. Simple and efficient.
 
 #### Arbitrary state watching
 
@@ -42,7 +42,7 @@ As proposed by @recmo in [this RFC](https://github.com/ethereum/EIPs/issues/781)
 1. execute any view function (e.g `balanceOf()`) as if it was a STATICCALL (see limitations below).
 2. Trace and remember all the storage locations accessed with SLOAD.
 
-When a new block is mined, call `eth_getStateDiff` for the block and see if any of the storage locations of interest have been modified. If so, re-compute the balance for the associated address. No other balances need be re-computed.
+When a new block is mined, call `eth_getStateDiff` for the block and see if any of the storage locations of interest have been modified. If so, re-compute the balance for the associated address. No other balances need be re-computed. If the application goes offline for some time, it can recover by requesting a state diff between it's last known block and the latest block.
 
 This approach is flexible enough to allow developers to efficiently watch any arbitrary contract state. It also allows developers to build applications that are more robust and cannot be easily tricked by incorrect or malicious implementations of contracts that omit events while modifying state. This is an especially important consideration for financial applications.
 
@@ -54,14 +54,15 @@ This approach is flexible enough to allow developers to efficiently watch any ar
 
 ### eth_getStateDiff
 
-Returns the state trie and nested storage trie diffs for the requested block.
+Returns the state trie and nested storage trie diffs of the block range.
 
 ```
 {
     "method": "eth_getStateDiff",
     "params": [
+        "number",
         "0x2ed119",
-        "number"
+        "0x2ed11e"
     ],
     "id": 1,
     "jsonrpc": "2.0"
@@ -70,8 +71,9 @@ Returns the state trie and nested storage trie diffs for the requested block.
 
 Parameters
 
-1. Block identifier (either a block hash or number)
-2. The block identifier type (either "hash" or "number")
+1. The block identifier type (either "hash" or "number")
+2. From block identifier (either a block hash or number)
+3. To block identifier (either a block hash or number) [Optional -- if omitted, gets diff for single block]
 
 Returns
 
@@ -122,9 +124,15 @@ If the diff is empty, we simply output `=`. If the diff is non-empty, an object 
 
 The endpoints design attempts to remain as simple, and use-case agnostic as possible. It simply returns the state diff using the already defined [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) contents. Instead of returning the diff of the storage root hash, it goes one level deeper and also diffs the associated storage tries.
 
+### Performance
+
+The state and storage tries are [merkle particia tries](https://github.com/ethereum/wiki/wiki/Patricia-Tree#main-specification-merkle-patricia-trie) and as such, have some nice performance characteristics. When diffing two tries, a traversal can ignore entire sub-tries for which parent nodes are identical. For the remaining nodes, a max traversal of `2 * 256` nodes is required to reach a leaf value of the trie (in reality it will be less thanks to [extension nodes](https://github.com/ethereum/wiki/wiki/Patricia-Tree#optimization)). This cost is also amortized between multiple modified leafs that are close to one another, as is the case for contract's storage. Beyond this constant cost, the remaining cost scales linearly with the number of differences between the two tries.
+
+Since there can be many state differences introduced within a sufficiently large block range, Ethereum clients should implement a request timeout that if reached, aborts the request. Despite having a request timeout on these requests, fetching state diffs for block ranges will be much more efficient then fetching every block.
+
 ### Related work
 
-The Geth team has already implemented a custom [`debug_getModifiedAccountsByNumber`](https://github.com/ethereum/go-ethereum/blob/91eec1251c06727581063cd7e942ba913d806971/eth/api.go#L421) JSON-RPC method that returns the addresses with modified ETH balances for a given block. They have identified the need for a more efficient way of performing this task.
+The Geth team has already implemented a custom [`debug_getModifiedAccountsByNumber`](https://github.com/ethereum/go-ethereum/blob/91eec1251c06727581063cd7e942ba913d806971/eth/api.go#L421) JSON-RPC method that returns the addresses with modified ETH balances for a given block range. They have identified the need for a more efficient way of performing this task.
 
 The Parity team has implemented a custom [`trace_replayBlockTransactions`](https://wiki.parity.io/JSONRPC-trace-module#trace_replayblocktransactions) JSON-RPC method that returns the ETH balance diffs as well as storage trie diffs for all transactions within a block. They too have identified the need to expose this functionality to their users.
 
