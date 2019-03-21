@@ -15,13 +15,13 @@ created: 2019-03-20
 
 <!--"If you can't explain it simply, you don't understand it well enough." Provide a simplified and layman-accessible explanation of the EIP.-->
 
-Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) diffs introduced by executing the transactions within a block.
+Add a JSON-RPC method that returns the [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) diffs introduced by specific a block.
 
 ## Abstract
 
 <!--A short (~200 word) description of the technical issue being addressed.-->
 
-There is currently no way for developers to retrieve the state trie or storage trie changes introduced by the transactions in a block. Trie diffs are a very efficient way to quickly figure out what blockchain state has changed, without re-executing every transactions within a block.
+There is currently no way for developers to retrieve the state trie or storage trie changes introduced by the transactions in a block. Trie diffs are a very efficient way to figure out what blockchain state has changed since the last block, _without_ re-executing and tracing every transactions within a block.
 
 ## Motivation
 
@@ -29,7 +29,7 @@ There is currently no way for developers to retrieve the state trie or storage t
 
 #### Ethereum balance watching
 
-One example use-case for requesting a state trie diff is efficiently tracking an arbitrarily large set of Ethereum balances. ETH transfers do not emit events and so there are currently only two ways to re-compute ETH balances when a new block is mined: re-fetch all ETH balances for all addresses of interest or request traces for every transaction within the block, and re-fetch balances for all addresses involved. The former is simple but neither way is efficient.
+One example use-case for requesting a state trie diff is efficiently tracking an arbitrarily large set of Ethereum balances. ETH transfers do not emit events and so there are currently only two ways to update ETH balances when a new block is mined: re-fetch all ETH balances for all addresses of interest or request traces for every transaction within the block, and re-fetch balances for all addresses involved. The former is simple but neither way is efficient.
 
 With `eth_getStateDiff`, a single JSON-RPC request will return all ETH balances modified by all transactions within a single block. Simple and efficient.
 
@@ -42,11 +42,11 @@ As proposed by @recmo in [this RFC](https://github.com/ethereum/EIPs/issues/781)
 1. execute any view function (e.g `balanceOf()`) as if it was a STATICCALL (see limitations below).
 2. Trace and remember all the storage locations accessed with SLOAD.
 
-When a new block is mined, call `eth_getStateDiff` for the block and see if any of the storage locations of interest have been modified. If so, re-compute the balance for the associated user. All other user balances do not need to be re-computed.
+When a new block is mined, call `eth_getStateDiff` for the block and see if any of the storage locations of interest have been modified. If so, re-compute the balance for the associated address. No other balances need be re-computed.
 
 This approach is flexible enough to allow developers to efficiently watch any arbitrary contract state. It also allows developers to build applications that are more robust and cannot be easily tricked by incorrect or malicious implementations of contracts that omit events while modifying state. This is an especially important consideration for financial applications.
 
-**Limitations**: The semantics of the function call to monitor are similar to that of STATICCALL, with the additional restriction that non-deterministic opcodes (BLOCKHASH, COINBASE, …) should not be used (they could be used at the risk of false negatives).
+**Limitations**: The semantics of the function call to monitor are similar to that of STATICCALL, with the additional restriction that non-deterministic opcodes (BLOCKHASH, COINBASE, …) should not be used (unless the application has other means of handling false negatives).
 
 ## Specification
 
@@ -120,7 +120,7 @@ If the diff is empty, we simply output `=`. If the diff is non-empty, an object 
 
 <!--The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.-->
 
-The endpoints design attempts to remain as simple, and use-case agnostic as possible. It simply returns the state diff using the already defined [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) contents. Instead of returning the diff of the storage root, it goes one level deeper and also diffs the associate storage tries.
+The endpoints design attempts to remain as simple, and use-case agnostic as possible. It simply returns the state diff using the already defined [state trie](https://github.com/ethereum/wiki/wiki/Patricia-Tree#state-trie) contents. Instead of returning the diff of the storage root hash, it goes one level deeper and also diffs the associated storage tries.
 
 ### Related work
 
@@ -128,7 +128,7 @@ The Geth team has already implemented a custom [`debug_getModifiedAccountsByNumb
 
 The Parity team has implemented a custom [`trace_replayBlockTransactions`](https://wiki.parity.io/JSONRPC-trace-module#trace_replayblocktransactions) JSON-RPC method that returns the ETH balance diffs as well as storage trie diffs for all transactions within a block. They too have identified the need to expose this functionality to their users.
 
-The EIP is largely an attempt to standardize these two approaches such that projects that wish to build solutions that aren't beholden to any single Ethereum client implementation may do so with confidence. Neither of the above methods are part of the standard and could be modified or removed easily.
+This EIP is largely an attempt to standardize these two approaches such that projects that wish to build solutions that aren't beholden to any single Ethereum client implementation may do so with confidence. Neither of the above methods are part of the standard and could be modified or removed easily.
 
 ## Backwards Compatibility
 
